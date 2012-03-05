@@ -33,6 +33,16 @@ not already exist."
      (let ((*print-case* :downcase))
        ,@body)))
 
+(defmacro retrying (&body body)
+  "Execute BODY in a PROGN and return its value upon completion.
+BODY may call RETRY at any time to restart its execution."
+  (let ((tagbody-name (gensym))
+        (block-name (gensym)))
+    `(block ,block-name
+       (tagbody ,tagbody-name
+         (flet ((retry () (go ,tagbody-name)))
+           ,@body)))))
+
 (defun file-comment-header (stream)
   (format stream ";;;; ~A~%~%" (file-namestring stream)))
 
@@ -67,6 +77,19 @@ not already exist."
   project. It is called with the same arguments passed to
   MAKE-PROJECT, except that NAME is canonicalized if necessary.")
 
+(defun write-project-files (pathname name depends-on)
+  "Write the system definition, package definition and readme files to the
+specified path."
+  (labels ((relative (file)
+             (merge-pathnames file pathname))
+           (nametype (type)
+             (relative (make-pathname :name name :type type))))
+    (ensure-directories-exist pathname)
+    (write-readme-file name (relative "README.txt"))
+    (write-system-file name (nametype "asd") :depends-on depends-on)
+    (write-package-file name (relative "package.lisp"))
+    (write-application-file name (nametype "lisp"))))
+
 (defun make-project (pathname &key
                      depends-on
                      (name (pathname-project-name pathname) name-provided-p))
@@ -78,17 +101,13 @@ it is used as the asdf defsystem depends-on list."
     (setf pathname (cl-fad:pathname-as-directory pathname))
     (unless name-provided-p
       (setf name (pathname-project-name pathname))))
-  (labels ((relative (file)
-             (merge-pathnames file pathname))
-           (nametype (type)
-             (relative (make-pathname :name name :type type))))
-    (ensure-directories-exist pathname)
-    (write-readme-file name (relative "README.txt"))
-    (write-system-file name (nametype "asd") :depends-on depends-on)
-    (write-package-file name (relative "package.lisp"))
-    (write-application-file name (nametype "lisp"))
-    (pushnew (truename pathname) asdf:*central-registry*
-             :test 'equal)
-    (dolist (hook *after-make-project-hooks*)
-      (funcall hook pathname :depends-on depends-on :name name))
-    name))
+  (retrying
+    (restart-case (write-project-files pathname name depends-on)
+      (overwrite-project ()
+        (cl-fad:delete-directory-and-files pathname)
+        (retry))))
+  (pushnew (truename pathname) asdf:*central-registry*
+           :test 'equal)
+  (dolist (hook *after-make-project-hooks*)
+    (funcall hook pathname :depends-on depends-on :name name))
+  name)
