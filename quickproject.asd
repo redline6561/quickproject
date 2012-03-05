@@ -5,4 +5,5 @@
   :depends-on (#:cl-fad)
   :serial t
   :components ((:file "package")
+               (:file "hooks")
                (:file "quickproject")))

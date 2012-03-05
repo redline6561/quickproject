@@ -72,11 +72,6 @@ BODY may call RETRY at any time to restart its execution."
     (format stream "(in-package ~S)~%~%" (uninterned-symbolize name))
     (format stream ";;; ~S goes here. Hacks and glory await!~%~%" name)))
 
-(defvar *after-make-project-hooks* nil
-  "A list of functions to call after MAKE-PROJECT is finished making a
-  project. It is called with the same arguments passed to
-  MAKE-PROJECT, except that NAME is canonicalized if necessary.")
-
 (defun write-project-files (pathname name depends-on)
   "Write the system definition, package definition and readme files to the
 specified path."
